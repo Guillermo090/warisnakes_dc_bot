@@ -10,12 +10,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# @bot.command(aliases=['pipin',"pepen"])
-# async def ping(ctx, *args):
-#     latency = round(bot.latency * 1000)
-#     await ctx.send(f"Pong! Latencia del bot: {latency} ms.")
-
-
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
