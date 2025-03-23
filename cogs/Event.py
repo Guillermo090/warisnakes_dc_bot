@@ -2,12 +2,12 @@ import discord
 from datetime import datetime
 from discord.ext import commands
 import asyncio
-from collections import defaultdict
 
 class EventCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.allowed_emojis = ["🛡️", "🍃", "🔥"] 
+        self.user_participations = {}  
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -30,6 +30,25 @@ class EventCog(commands.Cog):
                 delete_after=3
             )
             return
+        
+        # Añadir usuario a user_participations
+        message_id = message.id
+
+        # Verificar si el usuario ya tiene una reacción previa
+        if message_id in self.user_participations and user.id in self.user_participations[message_id]:
+            await reaction.remove(user)
+            await message.channel.send(
+                f"{user.mention} ¡Ya has reaccionado! Solo puedes elegir un rol. 🚫",
+                delete_after=3
+            )
+            return
+
+        if message_id not in self.user_participations:
+            self.user_participations[message_id] = set()
+
+        if user.id not in self.user_participations[message_id]:
+            self.user_participations[message_id].add(user.id)
+            await self.update_participants(message)
         
     async def is_event_message(self, message):
         """Verifica si el mensaje es un evento creado por el bot"""
@@ -59,16 +78,18 @@ class EventCog(commands.Cog):
             color=discord.Color.green(),
             timestamp=datetime.now(),
         )
+
+        # Dentro de la creación del embed, añade:
+        embed.add_field(
+            name="Participantes",
+            value="0 👤",
+            inline=False
+        )
         
         # Autor y footer
         embed.set_author(
             name=f"Organizado por {ctx.author.display_name}",
             icon_url=ctx.author.display_avatar.url
-        )
-        
-        embed.set_footer(
-            text=f"🗓️ {date} | ⏰ {time}",
-            icon_url="https://i.imgur.com/6JqjJ3p.png"  # Icono personalizado
         )
         
         # Mini calendario en descripción
@@ -93,29 +114,47 @@ class EventCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_reaction_remove(self, reaction, user):
-        print("asdasdasd")
         if user == self.bot.user:
             return
 
         message = reaction.message
         emoji = str(reaction.emoji)
 
-        if not await self.is_event_message(message):
+        if not await self.is_event_message(message) or emoji not in self.allowed_emojis:
             return
 
-        if emoji not in self.allowed_emojis:
-            return
+        # Verificar si el usuario aún tiene otras reacciones
+        has_other = False
+        for r in message.reactions:
+            if str(r.emoji) in self.allowed_emojis:
+                async for u in r.users():
+                    if u == user:
+                        has_other = True
+                        break
 
-        if user.id in self.user_participations[message.id]:
-            self.user_participations[message.id].remove(user.id)
-            await message.remove_reaction("👤", self.bot.user)
+        # Actualizar participantes solo si no hay más reacciones
+        if not has_other and message.id in self.user_participations:
+            if user.id in self.user_participations[message.id]:
+                self.user_participations[message.id].remove(user.id)
+                await self.update_participants(message)
 
-    async def is_event_message(self, message):
-        return (
-            message.author == self.bot.user and
-            message.embeds and
-            "Reacciona para participar:" in message.embeds[0].description
-        )
+    async def update_participants(self, message):
+        """Actualiza el contador de participantes en el embed"""
+        embed = message.embeds[0]
+        participant_count = len(self.user_participations.get(message.id, set()))
+        
+        # Buscar y actualizar el campo de participantes
+        for index, field in enumerate(embed.fields):
+            if field.name == "Participantes":
+                embed.set_field_at(
+                    index, 
+                    name="Participantes",
+                    value=f"{participant_count} 👤",
+                    inline=False
+                )
+                break
+        
+        await message.edit(embed=embed)
 
     def new_event_data_validator(self, ctx,  args):
 

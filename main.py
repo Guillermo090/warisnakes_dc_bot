@@ -5,10 +5,21 @@ import secrets_env
 import os
 import asyncio
 
-intents = discord.Intents.default()
+intents = discord.Intents.all()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+
+bot = commands.Bot(
+    command_prefix='!', 
+    intents=intents,
+    permissions=discord.Permissions(
+        send_messages=True,
+        embed_links=True,
+        read_messages=True,
+        add_reactions=True,
+        manage_messages=True  # Para eliminar reacciones no permitidas
+    )
+)
 
 @bot.event
 async def on_ready():
